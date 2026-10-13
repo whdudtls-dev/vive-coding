@@ -1,4 +1,4 @@
-const SPREADSHEET_ID = '1E5NUT2bL3MiYH6tnkH3-JR9G7isU9Q-u-gIlckzACeI';
+const SPREADSHEET_ID = '여기에_본인의_스프레드시트_ID_입력';
 const SHEET_NAME = '명예의 전당';
 
 function doGet(e) {
