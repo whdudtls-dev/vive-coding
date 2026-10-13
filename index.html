@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Gugi&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            touch-action: none;
+        }
+        .font-gugi {
+            font-family: 'Gugi', cursive;
+        }
+        .fraction {
+            font-size: 3.5rem;
+            display: inline-flex;
+            flex-direction: column;
+            text-align: center;
+            vertical-align: middle;
+            line-height: 1.1;
+        }
+        .fraction .numerator {
+            border-bottom: 2px solid black;
+            padding: 0 0.2em;
+        }
+        .fraction .denominator {
+            padding: 0 0.2em;
+        }
+        .mixed-fraction {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .mixed-fraction .whole {
+            font-size: 3.5rem;
+            margin-right: 0.5rem;
+        }
+        .mixed-fraction .fraction {
+            font-size: 1.75rem;
+        }
+        .hidden { display: none; }
+        .feedback-correct {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5rem;
+            color: #4CAF50;
+            font-weight: bold;
+            animation: fadeOut 1s forwards;
+            z-index: 1000;
+        }
+        .feedback-wrong {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            color: #F44336;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            animation: fadeOut 1.5s forwards;
+            z-index: 1000;
+        }
+        .draggable {
+            cursor: grab;
+            user-select: none;
+        }
+        .dragging {
+            opacity: 0.5;
+            transform: scale(1.1);
+        }
+        .drop-target {
+            border: 3px dashed #ccc;
+        }
+        .confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            to { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+        @keyframes spin {
+            0% { transform: rotateY(0deg); }
+            100% { transform: rotateY(1080deg); }
+        }
+        .spinner {
+            animation: spin 1.5s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-yellow-50 text-gray-800 select-none">
+
+    <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
+
+    <div id="game-container" class="max-w-4xl mx-auto p-4 min-h-screen flex flex-col justify-center items-center">
+
+        <!-- 시작 화면 -->
+        <div id="start-screen" class="text-center w-full">
+            <h1 class="text-6xl md:text-8xl font-gugi text-orange-500">분수 팡팡!</h1>
+            <p class="mt-4 text-xl text-gray-600">진분수, 가분수, 대분수를 배워보아요!</p>
+            <button id="start-button" class="mt-8 bg-green-500 hover:bg-green-600 text-white font-bold text-2xl py-4 px-10 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                게임 시작
+            </button>
+            <button id="hof-button" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold text-2xl py-4 px-10 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                명예의 전당
+            </button>
+        </div>
+
+        <!-- 게임 화면 -->
+        <div id="game-screen" class="hidden w-full text-center">
+            <div class="flex justify-between items-center mb-4 flex-wrap">
+                <div id="stage-display" class="text-xl md:text-2xl font-bold text-indigo-600">1단계</div>
+                <div id="question-counter" class="text-xl md:text-2xl font-bold text-gray-500">1 / 10</div>
+                <div id="timer-display" class="text-xl md:text-2xl font-bold"></div>
+                <div id="score-display" class="text-xl md:text-2xl font-bold text-yellow-600">점수: 0</div>
+            </div>
+            <div class="bg-white rounded-2xl shadow-xl p-6 min-h-[300px] flex flex-col justify-center items-center">
+                <div id="question-area" class="w-full"></div>
+            </div>
+            <div id="answer-area" class="mt-6 w-full"></div>
+             <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-4 mt-4">
+                <div id="progress-bar" class="bg-green-500 h-4 rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <!-- 게임 종료 화면 -->
+        <div id="end-screen" class="hidden text-center w-full">
+            <h2 class="text-5xl font-gugi text-purple-600">게임 종료!</h2>
+            <p class="mt-4 text-3xl">최종 점수: <span id="final-score" class="font-bold">0</span>점</p>
+            <p class="mt-6 text-xl">명예의 전당에 이름을 남겨주세요!</p>
+            <input type="text" id="player-name" placeholder="이름 입력 (5자 이내)" maxlength="5" class="mt-4 text-center text-xl p-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+            <button id="submit-score" class="mt-4 block mx-auto bg-blue-500 hover:bg-blue-600 text-white font-bold text-xl py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                등록하기
+            </button>
+            <button id="restart-button" class="mt-4 block mx-auto bg-gray-500 hover:bg-gray-600 text-white font-bold text-xl py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                다시하기
+            </button>
+        </div>
+
+        <!-- 명예의 전당 화면 -->
+        <div id="hof-screen" class="hidden w-full max-w-lg">
+            <h2 class="text-5xl font-gugi text-center text-yellow-600 mb-6">🏆 명예의 전당 🏆</h2>
+            <div id="hof-list" class="bg-white rounded-2xl shadow-xl p-6 space-y-2">
+                <p id="hof-loading">불러오는 중...</p>
+            </div>
+            <button id="back-to-start-button" class="mt-6 block mx-auto bg-gray-500 hover:bg-gray-600 text-white font-bold text-xl py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                처음으로
+            </button>
+        </div>
+        
+        <div id="feedback-message" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <script>
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const endScreen = document.getElementById('end-screen');
+        const hofScreen = document.getElementById('hof-screen');
+        
+        const startButton = document.getElementById('start-button');
+        const hofButton = document.getElementById('hof-button');
+        const restartButton = document.getElementById('restart-button');
+        const submitScoreButton = document.getElementById('submit-score');
+        const backToStartButton = document.getElementById('back-to-start-button');
+        
+        const stageDisplay = document.getElementById('stage-display');
+        const scoreDisplay = document.getElementById('score-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const questionArea = document.getElementById('question-area');
+        const answerArea = document.getElementById('answer-area');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const progressBar = document.getElementById('progress-bar');
+        const timerDisplay = document.getElementById('timer-display');
+        const questionCounter = document.getElementById('question-counter'); // 문제 카운터
+
+        const FRACTION_TYPES = {
+            PROPER: '진분수',
+            IMPROPER: '가분수',
+            MIXED: '대분수'
+        };
+
+        let currentStage = 1;
+        let score = 0;
+        let questionCount = 0;
+        let questionsPerStage = 10;
+        let attemptedOnce = false;
+        let currentQuestion = {};
+        let timerInterval = null;
+        const TIME_PER_QUESTION = 15; // 문제당 시간 (초)
+        let timeLeft = 0;
+
+        // --- 유틸리티 함수 ---
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function createFractionHTML(fraction) {
+            if (fraction.type === FRACTION_TYPES.MIXED) {
+                return `<div class="mixed-fraction">
+                            <div class="whole">${fraction.whole}</div>
+                            <div class="fraction">
+                                <span class="numerator">${fraction.num}</span>
+                                <span class="denominator">${fraction.den}</span>
+                            </div>
+                        </div>`;
+            }
+            return `<div class="fraction">
+                        <span class="numerator">${fraction.num}</span>
+                        <span class="denominator">${fraction.den}</span>
+                    </div>`;
+        }
+        
+        function generateFraction() {
+            const typeIndex = getRandomInt(0, 2);
+            let fraction = {};
+            
+            if (typeIndex === 0) { // 진분수
+                const den = getRandomInt(3, 9);
+                const num = getRandomInt(1, den - 1);
+                fraction = { num, den, type: FRACTION_TYPES.PROPER };
+            } else if (typeIndex === 1) { // 가분수
+                const den = getRandomInt(2, 9);
+                const num = getRandomInt(den, 9);
+                fraction = { num, den, type: FRACTION_TYPES.IMPROPER };
+            } else { // 대분수
+                const whole = getRandomInt(1, 9);
+                const den = getRandomInt(3, 9);
+                const num = getRandomInt(1, den - 1);
+                fraction = { whole, num, den, type: FRACTION_TYPES.MIXED };
+            }
+            return fraction;
+        }
+
+        // --- 게임 흐름 ---
+        function startGame() {
+            currentStage = 1;
+            score = 0;
+            questionCount = 0;
+            questionsPerStage = 10;
+            updateScore();
+            startScreen.classList.add('hidden');
+            endScreen.classList.add('hidden');
+            hofScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            clearInterval(timerInterval);
+            setupStage();
+        }
+
+        function nextQuestion() {
+            attemptedOnce = false;
+            questionCount++;
+             progressBar.style.width = `${(questionCount / questionsPerStage) * 100}%`;
+
+            if (questionCount >= questionsPerStage) {
+                currentStage++;
+                if (currentStage > 5) {
+                    endGame();
+                } else {
+                    questionCount = 0;
+                    if(currentStage === 5) questionsPerStage = 5;
+                    else questionsPerStage = 10; // 1-4단계는 10문제
+                    progressBar.style.width = `0%`;
+                    setupStage();
+                }
+            } else {
+                setupStage();
+            }
+        }
+
+        function setupStage() {
+            stageDisplay.textContent = `${currentStage}단계`;
+            questionCounter.textContent = `${questionCount + 1} / ${questionsPerStage}`; // 문제 카운터 업데이트
+            answerArea.innerHTML = '';
+            questionArea.innerHTML = '';
+            startTimer();
+
+            switch(currentStage) {
+                case 1: setupStage1(); break;
+                case 2: setupStage2(); break;
+                case 3: setupStage3(); break;
+                case 4: setupStage4(); break;
+                case 5: setupStage5(); break;
+            }
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            gameScreen.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+            finalScoreDisplay.textContent = score;
+        }
+
+        function updateScore(points = 0) {
+            score += points;
+            scoreDisplay.textContent = `점수: ${score}`;
+        }
+        
+        function showFeedback(correct, message = null) {
+            feedbackMessage.innerHTML = '';
+            if(correct) {
+                const correctMsg = document.createElement('div');
+                correctMsg.textContent = message ? message : '정답!'; // 점수 메시지 표시
+                correctMsg.className = 'feedback-correct';
+                feedbackMessage.appendChild(correctMsg);
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            } else {
+                const wrongMsg = document.createElement('div');
+                if (message) {
+                    wrongMsg.textContent = message;
+                } else {
+                    const messages = ['다시 한번 생각해볼까?', '아쉬워요! 힘내요!', '거의 다 왔어요!', '괜찮아, 할 수 있어!'];
+                    wrongMsg.textContent = messages[getRandomInt(0, messages.length - 1)];
+                }
+                wrongMsg.className = 'feedback-wrong';
+                feedbackMessage.appendChild(wrongMsg);
+            }
+            setTimeout(() => {
+                feedbackMessage.innerHTML = '';
+            }, 1500);
+        }
+
+        // --- 타이머 함수 ---
+        function startTimer() {
+            clearInterval(timerInterval);
+            timeLeft = TIME_PER_QUESTION;
+            timerDisplay.textContent = `시간: ${timeLeft}`;
+            timerDisplay.classList.remove('text-red-500');
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = `시간: ${timeLeft}`;
+                if (timeLeft <= 5) {
+                    timerDisplay.classList.add('text-red-500');
+                }
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeUp();
+                }
+            }, 1000);
+        }
+
+        function handleTimeUp() {
+            showFeedback(false, "시간 초과!");
+            attemptedOnce = true;
+            setTimeout(nextQuestion, 1500);
+        }
+
+        // --- 단계별 설정 ---
+
+        function setupStage1() {
+            currentQuestion = generateFraction();
+            questionArea.innerHTML = createFractionHTML(currentQuestion);
+            
+            answerArea.innerHTML = `
+                <div class="grid grid-cols-3 gap-4">
+                    <button data-type="${FRACTION_TYPES.PROPER}" class="answer-btn text-2xl p-6 bg-blue-400 text-white rounded-lg shadow-md hover:bg-blue-500">${FRACTION_TYPES.PROPER}</button>
+                    <button data-type="${FRACTION_TYPES.IMPROPER}" class="answer-btn text-2xl p-6 bg-red-400 text-white rounded-lg shadow-md hover:bg-red-500">${FRACTION_TYPES.IMPROPER}</button>
+                    <button data-type="${FRACTION_TYPES.MIXED}" class="answer-btn text-2xl p-6 bg-green-400 text-white rounded-lg shadow-md hover:bg-green-500">${FRACTION_TYPES.MIXED}</button>
+                </div>
+            `;
+            
+            document.querySelectorAll('.answer-btn').forEach(btn => {
+                btn.addEventListener('click', () => checkAnswerStage1(btn.dataset.type));
+            });
+        }
+        
+        function checkAnswerStage1(answer) {
+            if (answer === currentQuestion.type) {
+                // [FIX] 버튼 중복 클릭 방지
+                document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = true);
+                
+                clearInterval(timerInterval);
+                const bonus = timeLeft; // 남은 시간만큼 보너스
+                const baseScore = attemptedOnce ? 5 : 10;
+                const points = baseScore + bonus;
+                showFeedback(true, `+${points}점!`);
+                updateScore(points);
+                setTimeout(nextQuestion, 1000);
+            } else {
+                showFeedback(false);
+                attemptedOnce = true;
+            }
+        }
+
+        function setupStage2() {
+            let properFraction, improperFraction, mixedFraction;
+            do { properFraction = generateFraction(); } while (properFraction.type !== FRACTION_TYPES.PROPER);
+            do { improperFraction = generateFraction(); } while (improperFraction.type !== FRACTION_TYPES.IMPROPER);
+            do { mixedFraction = generateFraction(); } while (mixedFraction.type !== FRACTION_TYPES.MIXED);
+
+            let fractions = [properFraction, improperFraction, mixedFraction];
+            fractions.sort(() => Math.random() - 0.5);
+
+            questionArea.innerHTML = `
+                <p class="text-xl mb-4">분수를 알맞은 바구니로 옮겨보세요!</p>
+                <div id="draggable-items" class="flex justify-center gap-4 items-center h-32">
+                    ${fractions.map((f, i) => `<div class="draggable p-2 bg-yellow-200 rounded-lg shadow" data-type="${f.type}" data-id="${i}">${createFractionHTML(f)}</div>`).join('')}
+                </div>
+            `;
+
+            answerArea.innerHTML = `
+                <div class="grid grid-cols-3 gap-4 mt-4">
+                    <div class="drop-target p-4 bg-blue-100 rounded-lg min-h-[120px] flex justify-center items-center" data-target="${FRACTION_TYPES.PROPER}"><h3 class="text-xl font-bold">${FRACTION_TYPES.PROPER}</h3></div>
+                    <div class="drop-target p-4 bg-red-100 rounded-lg min-h-[120px] flex justify-center items-center" data-target="${FRACTION_TYPES.IMPROPER}"><h3 class="text-xl font-bold">${FRACTION_TYPES.IMPROPER}</h3></div>
+                    <div class="drop-target p-4 bg-green-100 rounded-lg min-h-[120px] flex justify-center items-center" data-target="${FRACTION_TYPES.MIXED}"><h3 class="text-xl font-bold">${FRACTION_TYPES.MIXED}</h3></div>
+                </div>
+                 <button id="check-stage2" class="mt-4 bg-purple-500 hover:bg-purple-600 text-white font-bold text-xl py-3 px-8 rounded-full">정답 확인</button>
+            `;
+
+            let draggedItem = null;
+            document.querySelectorAll('.draggable').forEach(item => {
+                const handleStart = (e) => {
+                    draggedItem = e.target.closest('.draggable');
+                    draggedItem.classList.add('dragging');
+                };
+                const handleEnd = (e) => {
+                    if (!draggedItem) return;
+                    draggedItem.classList.remove('dragging');
+                    const touch = e.changedTouches ? e.changedTouches[0] : e;
+                    const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY).closest('.drop-target');
+                    if (dropTarget) {
+                        while(dropTarget.childElementCount > 1) {
+                            document.getElementById('draggable-items').appendChild(dropTarget.lastChild);
+                        }
+                        dropTarget.appendChild(draggedItem);
+                    }
+                    draggedItem = null;
+                };
+                item.addEventListener('touchstart', handleStart);
+                item.addEventListener('touchend', handleEnd);
+                item.addEventListener('mousedown', handleStart);
+                item.addEventListener('mouseup', handleEnd);
+            });
+
+            document.getElementById('check-stage2').addEventListener('click', checkAnswerStage2);
+        }
+
+        function checkAnswerStage2() {
+             let allCorrect = true;
+             document.querySelectorAll('.drop-target').forEach(target => {
+                 const targetType = target.dataset.target;
+                 const children = target.querySelectorAll('.draggable');
+                 if (children.length !== 1 || children[0].dataset.type !== targetType) {
+                     allCorrect = false;
+                 }
+             });
+            if(document.querySelectorAll('#draggable-items .draggable').length > 0) allCorrect = false;
+
+             if (allCorrect) {
+                 // [FIX] 버튼 중복 클릭 방지
+                document.getElementById('check-stage2').disabled = true;
+                 
+                 clearInterval(timerInterval);
+                 const bonus = timeLeft;
+                 const baseScore = attemptedOnce ? 5 : 10;
+                 const points = baseScore + bonus;
+                 showFeedback(true, `+${points}점!`);
+                 updateScore(points);
+                 setTimeout(nextQuestion, 1000);
+             } else {
+                 showFeedback(false);
+                 attemptedOnce = true;
+                 setupStage2();
+             }
+        }
+
+        function setupStage3() {
+            currentQuestion = generateFraction();
+            questionArea.innerHTML = createFractionHTML(currentQuestion);
+            answerArea.innerHTML = `
+                <p class="text-xl mb-4">
+                    <b>진분수</b>는 동그라미, <b>가분수</b>는 세모, <b>대분수</b>는 네모를 고르세요.
+                </p>
+                <div class="flex justify-center items-center gap-8 mt-4">
+                    <button data-type="${FRACTION_TYPES.PROPER}" class="answer-btn p-4 rounded-full bg-blue-400 hover:bg-blue-500"><svg class="w-20 h-20 text-white" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/></svg></button>
+                    <button data-type="${FRACTION_TYPES.IMPROPER}" class="answer-btn p-4 rounded-lg bg-red-400 hover:bg-red-500"><svg class="w-20 h-20 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2L2 18h16L10 2z"/></svg></button>
+                    <button data-type="${FRACTION_TYPES.MIXED}" class="answer-btn p-4 rounded-lg bg-green-400 hover:bg-green-500"><svg class="w-20 h-20 text-white" fill="currentColor" viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14"/></svg></button>
+                </div>
+            `;
+            document.querySelectorAll('.answer-btn').forEach(btn => {
+                btn.addEventListener('click', () => checkAnswerStage1(btn.dataset.type));
+            });
+        }
+        
+        function setupStage4() {
+            questionArea.innerHTML = `<p class="text-xl mb-4">버튼을 눌러 분수를 뽑아보세요!</p><div id="machine-display" class="h-32 w-48 bg-gray-200 mx-auto rounded-lg flex justify-center items-center text-4xl shadow-inner">?</div>`;
+            answerArea.innerHTML = `
+                <button id="spin-button" class="mt-4 bg-purple-500 hover:bg-purple-600 text-white font-bold text-xl py-3 px-8 rounded-full">작동!</button>
+                <div id="stage4-answers" class="hidden mt-6 grid grid-cols-3 gap-4">
+                    <button data-type="${FRACTION_TYPES.PROPER}" class="answer-btn text-2xl p-6 bg-blue-400 text-white rounded-lg shadow-md hover:bg-blue-500">${FRACTION_TYPES.PROPER}</button>
+                    <button data-type="${FRACTION_TYPES.IMPROPER}" class="answer-btn text-2xl p-6 bg-red-400 text-white rounded-lg shadow-md hover:bg-red-500">${FRACTION_TYPES.IMPROPER}</button>
+                    <button data-type="${FRACTION_TYPES.MIXED}" class="answer-btn text-2xl p-6 bg-green-400 text-white rounded-lg shadow-md hover:bg-green-500">${FRACTION_TYPES.MIXED}</button>
+                </div>
+            `;
+            const spinButton = document.getElementById('spin-button');
+            const machineDisplay = document.getElementById('machine-display');
+            const stage4Answers = document.getElementById('stage4-answers');
+            spinButton.addEventListener('click', () => {
+                spinButton.disabled = true;
+                machineDisplay.classList.add('spinner');
+                setTimeout(() => {
+                    machineDisplay.classList.remove('spinner');
+                    currentQuestion = generateFraction();
+                    machineDisplay.innerHTML = createFractionHTML(currentQuestion);
+                    stage4Answers.classList.remove('hidden');
+                    spinButton.classList.add('hidden');
+                    document.querySelectorAll('#stage4-answers .answer-btn').forEach(btn => {
+                        btn.addEventListener('click', () => checkAnswerStage1(btn.dataset.type));
+                    });
+                }, 1500);
+            });
+        }
+        
+        function setupStage5() {
+             const den = getRandomInt(4, 9);
+             const correctAnswers = Array.from({length: den - 1}, (_, i) => i + 1);
+             currentQuestion = { den, correctAnswers };
+             questionArea.innerHTML = `<p class="text-xl mb-4">진분수가 되려면 분자에 어떤 숫자가 와야 할까요?<br>정답을 모두 골라주세요.</p><div class="fraction"><span class="numerator bg-gray-200 px-4 py-2 rounded">?</span><span class="denominator">${den}</span></div>`;
+            let numbersHTML = '';
+            for (let i = 1; i <= 9; i++) {
+                numbersHTML += `<button data-num="${i}" class="num-btn text-2xl p-4 bg-gray-200 rounded-lg shadow-md transition-colors">${i}</button>`;
+            }
+            answerArea.innerHTML = `<div class="grid grid-cols-5 gap-4">${numbersHTML}</div><button id="check-stage5" class="mt-6 bg-purple-500 hover:bg-purple-600 text-white font-bold text-xl py-3 px-8 rounded-full">정답 확인</button>`;
+            
+            document.querySelectorAll('.num-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const isSelected = btn.classList.contains('bg-yellow-400');
+                    if (isSelected) {
+                        btn.classList.remove('bg-yellow-400');
+                        btn.classList.add('bg-gray-200');
+                    } else {
+                        btn.classList.add('bg-yellow-400');
+                        btn.classList.remove('bg-gray-200');
+                    }
+                });
+            });
+            document.getElementById('check-stage5').addEventListener('click', checkAnswerStage5);
+        }
+
+        function checkAnswerStage5() {
+            const selectedButtons = document.querySelectorAll('.num-btn.bg-yellow-400');
+            const selectedNums = Array.from(selectedButtons).map(btn => parseInt(btn.dataset.num));
+            const correct = currentQuestion.correctAnswers.length === selectedNums.length && currentQuestion.correctAnswers.every(num => selectedNums.includes(num));
+            if (correct) {
+                // [FIX] 버튼 중복 클릭 방지
+                document.querySelectorAll('.num-btn').forEach(btn => btn.disabled = true);
+                document.getElementById('check-stage5').disabled = true;
+
+                clearInterval(timerInterval);
+                const bonus = timeLeft;
+                const baseScore = attemptedOnce ? 5 : 10;
+                const points = baseScore + bonus;
+                showFeedback(true, `+${points}점!`);
+                updateScore(points);
+                setTimeout(nextQuestion, 1000);
+            } else {
+                showFeedback(false);
+                attemptedOnce = true;
+            }
+        }
+        
+        // --- 명예의 전당 ---
+        function showHallOfFame() {
+            startScreen.classList.add('hidden');
+            hofScreen.classList.remove('hidden');
+            const hofList = document.getElementById('hof-list');
+            const hofLoading = document.getElementById('hof-loading');
+            hofLoading.style.display = 'block';
+            hofLoading.textContent = '불러오는 중...';
+
+            google.script.run
+                .withSuccessHandler(data => {
+                    if (data.error) {
+                        console.error('Error from server:', data.error);
+                        hofList.innerHTML = `<p class="text-center text-red-500">명예의 전당을 불러오는 데 실패했습니다.</p>`;
+                        return;
+                    }
+                    hofList.innerHTML = `<div class="grid grid-cols-3 gap-4 font-bold border-b-2 pb-2 text-lg"><span>순위</span><span>이름</span><span class="text-right">점수</span></div>`;
+                    if (data.length === 0) {
+                         hofList.innerHTML += `<p class="text-center col-span-3 py-4">아직 기록이 없습니다.</p>`;
+                         return;
+                    }
+                    data.slice(0, 10).forEach((entry, index) => {
+                        const rank = index + 1;
+                        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+                        const row = document.createElement('div');
+                        row.className = 'grid grid-cols-3 gap-4 items-center py-2';
+                        row.innerHTML = `<span class="font-bold text-xl">${medal}</span><span class="text-lg">${entry.name}</span><span class="text-right text-lg font-bold">${entry.score}점</span>`;
+                        hofList.appendChild(row);
+                    });
+                })
+                .withFailureHandler(error => {
+                    console.error('Error fetching hall of fame:', error);
+                    hofList.innerHTML = `<p class="text-center text-red-500">명예의 전당을 불러오는 데 실패했습니다.</p>`;
+                })
+                .getHallOfFameData();
+        }
+        
+        function submitScore() {
+            const playerNameInput = document.getElementById('player-name');
+            const playerName = playerNameInput.value.trim();
+            if (!playerName) {
+                showFeedback(false, '이름을 입력해주세요!');
+                return;
+            }
+
+            submitScoreButton.disabled = true;
+            submitScoreButton.textContent = '등록 중...';
+
+            const data = { name: playerName, score: score };
+
+            google.script.run
+                .withSuccessHandler(response => {
+                    if (response.status === 'success') {
+                        playerNameInput.value = '';
+                        endScreen.classList.add('hidden');
+                        showHallOfFame();
+                    } else {
+                        showFeedback(false, '점수 등록에 실패했습니다: ' + response.message);
+                    }
+                    submitScoreButton.disabled = false;
+                    submitScoreButton.textContent = '등록하기';
+                })
+                .withFailureHandler(error => {
+                    console.error('Error submitting score:', error);
+                    showFeedback(false, '점수 등록 중 오류가 발생했습니다.');
+                    submitScoreButton.disabled = false;
+                    submitScoreButton.textContent = '등록하기';
+                })
+                .submitScore(data);
+        }
+
+        // --- 이벤트 리스너 ---
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        submitScoreButton.addEventListener('click', submitScore);
+        hofButton.addEventListener('click', showHallOfFame);
+        backToStartButton.addEventListener('click', () => {
+            hofScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>
+
